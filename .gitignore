@@ -61,3 +61,7 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+**/target
+**/nb-configuration.xml
+**/nbactions.xml
