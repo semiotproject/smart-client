@@ -68,8 +68,8 @@ public class HTTPClient {
       + "\n"
       + "[ a semiot:ChangeValueCommand ;\n"
       + "  dcterms:identifier \"change-regulator_value\" ;\n"
-      + "  semiot:forProcess <https://${HOST}/systems/${SYSTEM_ID}/processes/pressure> ;\n"
-      + "  dul:associatedWith <https://${HOST}/systems/${SYSTEM_ID}> ;\n"
+      + "  semiot:forProcess <${HOST}/systems/${SYSTEM_ID}/processes/pressure> ;\n"
+      + "  dul:associatedWith <${HOST}/systems/${SYSTEM_ID}> ;\n"
       + "  dul:hasParameter [\n"
       + "    a semiot:MappingParameter ;\n"
       + "    semiot:forParameter :Regulator-ChangeValue-Pressure ;\n"
@@ -143,7 +143,7 @@ public class HTTPClient {
   public void sendCommand(String system_id, double value) {
     String command_url = url + "/systems/" + system_id + "/processes/pressure";
     logger.debug("Try to send command to url '{}' with value {}", command_url, value);
-    logger.info("Send command for id '{}'", system_id);
+    long st = System.currentTimeMillis();
     HttpPost httpPost = new HttpPost(command_url);
     String entity = COMMAND.replace("${HOST}", this.url).replace("${SYSTEM_ID}", system_id).replace("${VALUE}", Double.toString(value));
     try {
@@ -152,13 +152,12 @@ public class HTTPClient {
       httpPost.setHeader("Cookie", cookie);
       CloseableHttpResponse response = httpclient.execute(httpPost);
       if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
-        logger.info("Command for id '{}' is sent", system_id);
         logger.debug("Command to url '{}' is sent successfuly!", command_url);
       } else {
-        logger.info("Command for id '{}' isn't sent", system_id);
         logger.warn("Something went wrong with command to url '{}'! Response code is {}, reason {}",
             command_url, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
       }
+      logger.info("Command is executed by {} ms", (long)((System.currentTimeMillis()-st)));
       response.close();
     } catch (IOException ex) {
       logger.warn("Cath exception! Message is {}", ex.getMessage(), ex);

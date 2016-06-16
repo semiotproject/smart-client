@@ -25,18 +25,6 @@ public interface ClientConfig extends Config {
   @Key("smart.client.host.password")
   String hostPassword();
 
-  @DefaultValue("http://demo.semiot.ru:3030/ds/query")
-  @Key("smart.client.sparql.url")
-  String sparqlUrl();
-
-  @DefaultValue("admin")
-  @Key("smart.client.sparql.username")
-  String sparqlUsername();
-
-  @DefaultValue("pw")
-  @Key("smart.client.sparql.password")
-  String sparqlPassword();
-
   @DefaultValue("https://demo.semiot.ru")
   @Key("smart.client.host.uri")
   String hostUrl();
