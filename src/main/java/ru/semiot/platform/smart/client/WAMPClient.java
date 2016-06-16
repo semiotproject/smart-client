@@ -25,7 +25,7 @@ public class WAMPClient implements Closeable, AutoCloseable {
     return INSTANCE;
   }
 
- 
+
 
   public Observable<WampClient.State> init(
       String wampUri, String wampRealm, int wampReconnectInterval,

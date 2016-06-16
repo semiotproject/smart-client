@@ -1,5 +1,6 @@
 package ru.semiot.platform.smart.client;
 
+import java.io.StringReader;
 import java.util.HashMap;
 import org.apache.jena.atlas.web.auth.HttpAuthenticator;
 import org.apache.jena.atlas.web.auth.SimpleAuthenticator;
@@ -9,6 +10,7 @@ import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.rdf.model.ModelFactory;
+import org.apache.jena.riot.RDFLanguages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,7 +25,7 @@ public class SPARQLClient {
   private HttpAuthenticator authenticator;
   private String url;
   private static final String URL_TEMPERATURE_DEVICE_PROTOTYPE
-      = "https://raw.githubusercontent.com/semiotproject/semiot-drivers/temperature-simulator/"
+      = "https://raw.githubusercontent.com/semiotproject/semiot-drivers/master/temperature-simulator/"
       + "src/main/resources/ru/semiot/drivers/temperature/simulator/prototype.ttl#TemperatureDevice";
   private static final String URL_TEMPERATURE_REGULATOR_PROTOTYPE
       = "https://raw.githubusercontent.com/semiotproject/semiot-drivers/master/regulator-simulator/"
@@ -86,9 +88,9 @@ public class SPARQLClient {
       //WTF?!?!?
       if (isDevice) {
         topic += "." + system + "-temperature";
-      }
-      else
+      } else {
         topic += ".pressure";
+      }
 
       String building = solution.getLiteral("?building").getString();
       if (map.containsKey(building)) {
@@ -102,26 +104,30 @@ public class SPARQLClient {
     return map;
   }
 
-  public double getValueFromCommandResult(String commandResult){
+  public double getValueFromCommandResult(String commandResult) {
+    //logger.debug(commandResult);
     Model model = ModelFactory.createDefaultModel();
-    model.read(commandResult, "JSON-LD");
+    model.read(new StringReader(commandResult), null, RDFLanguages.strLangJSONLD);
     ResultSet rs = QueryExecutionFactory.create(QUERY_VALUE, model).execSelect();
     Double value = null;
-    while(rs.hasNext()){
+    while (rs.hasNext()) {
       QuerySolution solution = rs.next();
-      value = solution.getLiteral("?value").getDouble();
+      value = Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
     }
     return value;
   }
 
-  public double getValueFromObservation(String commandResult){
+  public double getValueFromObservation(String observation) {
+    //logger.debug(observation);
     Model model = ModelFactory.createDefaultModel();
-    model.read(commandResult, "JSON-LD");
+    model.read(new StringReader(observation), null, RDFLanguages.strLangJSONLD);
     ResultSet rs = QueryExecutionFactory.create(QUERY_OBS_VALUE, model).execSelect();
     Double value = null;
-    while(rs.hasNext()){
+    while (rs.hasNext()) {
       QuerySolution solution = rs.next();
-      value = solution.getLiteral("?value").getDouble();
+      String v = solution.getLiteral("?value").getString();
+      logger.info("Value is {}", v);
+      value = Double.parseDouble(v.replace(',', '.'));
     }
     return value;
   }
