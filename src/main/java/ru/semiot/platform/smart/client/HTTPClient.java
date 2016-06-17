@@ -6,6 +6,7 @@
 package ru.semiot.platform.smart.client;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -30,6 +31,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.util.EntityUtils;
 import org.apache.jena.query.QueryExecutionFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ResultSet;
@@ -54,10 +56,18 @@ public class HTTPClient {
       + "<http://purl.org/dc/terms/identifier> ?system_id "
       + "}";
 
+  private static final String QUERY_COMMAND_RESULT = "SELECT ?value { "
+      + "?z a <http://w3id.org/semiot/ontologies/semiot#CommandResult>; "
+      + "<http://w3id.org/semiot/ontologies/semiot#isResultOf> ["
+      + "<http://www.loa-cnr.it/ontologies/DUL.owl#hasParameter>/<http://www.loa-cnr.it/ontologies/DUL.owl#hasParameterDataValue> ?value "
+      + "]"
+      + "}";
+
   private static final String QUERY_PLACE = "SELECT ?building { "
       + "?z a <http://schema.org/Place>; "
       + "<http://schema.org/branchCode> ?building "
       + "}";
+
   private static final String COMMAND
       = "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
       + "@prefix dul: <http://www.loa-cnr.it/ontologies/DUL.owl#> .\n"
@@ -143,24 +153,27 @@ public class HTTPClient {
   public void sendCommand(String system_id, double value) {
     String command_url = url + "/systems/" + system_id + "/processes/pressure";
     logger.debug("Try to send command to url '{}' with value {}", command_url, value);
-    long st = System.currentTimeMillis();
     HttpPost httpPost = new HttpPost(command_url);
     String entity = COMMAND.replace("${HOST}", this.url).replace("${SYSTEM_ID}", system_id).replace("${VALUE}", Double.toString(value));
+    long stop;
     try {
       httpPost.setEntity(new StringEntity(entity));
       httpPost.setHeader("Content-Type", "text/turtle");
       httpPost.setHeader("Cookie", cookie);
+      long st = System.currentTimeMillis();
       CloseableHttpResponse response = httpclient.execute(httpPost);
+      stop = System.currentTimeMillis();
       if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
         logger.debug("Command to url '{}' is sent successfuly!", command_url);
+        logger.info("Command is executed by {} ms", stop-st);
       } else {
-        logger.warn("Something went wrong with command to url '{}'! Response code is {}, reason {}",
-            command_url, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
+        logger.warn("Something went wrong with command to url '{}' ! Execution time is {} ms. Response code is {}, reason {}",
+            command_url, stop-st, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
       }
-      logger.info("Command is executed by {} ms", (long)((System.currentTimeMillis()-st)));
+      logger.info("Command is executed by {} ms", (long) ((System.currentTimeMillis() - st)));
       response.close();
     } catch (IOException ex) {
-      logger.warn("Cath exception! Message is {}", ex.getMessage(), ex);
+      logger.warn("Catch exception! Message is {}", ex.getMessage(), ex);
     }
   }
 
@@ -241,5 +254,37 @@ public class HTTPClient {
       logger.warn("Can't get building for id {}! Message is {}", system_id, ex.getMessage(), ex);
     }
     return null;
+  }
+
+  public double getLastCommandResult(String regulator_id) {
+    String uri = url + "/systems/" + regulator_id + "/processes/pressure/commandResults";
+    HttpGet httpGet = new HttpGet(uri);
+    Double d = null;
+    try {
+      httpGet.setHeader("Accept", "application/ld+json");
+      httpGet.setHeader("Cookie", cookie);
+      CloseableHttpResponse response = httpclient.execute(httpGet);
+      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+        logger.warn("Something went wrong! Response code is {}, reason {}",
+            response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
+        response.close();
+      } else {
+        Model model = ModelFactory.createDefaultModel();
+        String desc = EntityUtils.toString(response.getEntity());
+        model.read(new StringReader(desc), null, RDFLanguages.strLangJSONLD);
+        //model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
+        response.close();
+        ResultSet rs = QueryExecutionFactory.create(QUERY_COMMAND_RESULT.replace("${URI}", uri), model).execSelect();
+        while (rs.hasNext()) {
+          QuerySolution solution = rs.next();
+          return Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
+        }
+
+      }
+
+    } catch (IOException ex) {
+      logger.warn("Can't get commandResult for id {}! Message is {}", regulator_id, ex.getMessage(), ex);
+    }
+    return d;
   }
 }

@@ -3,6 +3,10 @@ package ru.semiot.platform.smart.client;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 import java.util.HashMap;
 import org.aeonbits.owner.ConfigFactory;
@@ -38,7 +42,6 @@ public class Launcher {
       + "?z a <http://qudt.org/schema/qudt#QuantityValue>; "
       + "<http://qudt.org/schema/qudt#quantityValue> ?value "
       + "}";
-
 
   public Launcher() {
     logger.debug("Try to initialize launcher");
@@ -83,12 +86,7 @@ public class Launcher {
                 regulatorsLastResults.put(regulator, getValueFromModel(commandResult, QUERY_VALUE));
               }
             });
-        try {
-          Thread.sleep(1000);
-        } catch (InterruptedException ex) {
-          logger.warn(ex.getMessage(), ex);
-        }
-        HTTPClient.getInstance().sendCommand(regulator, 100);
+        regulatorsLastResults.put(regulator, HTTPClient.getInstance().getLastCommandResult(regulator));
       }
     }
     logger.debug("Try to subscribe in devices' topics");
@@ -108,6 +106,18 @@ public class Launcher {
 
               @Override
               public void onNext(String observation) {
+                long stop = System.currentTimeMillis();
+                String stopTime = DateTimeFormatter.ISO_OFFSET_DATE_TIME
+                    .withZone(ZoneOffset.UTC)
+                    .format(Instant.ofEpochMilli(stop));
+
+                long start = getTimestamp(observation);
+                String startTime = DateTimeFormatter.ISO_OFFSET_DATE_TIME
+                    .withZone(ZoneOffset.UTC)
+                    .format(Instant.ofEpochMilli(start));
+                logger.debug("Observation sent in {}", startTime);
+                logger.debug("Observation received in {}", stopTime);
+                logger.info("Observation execute time is {} ms", stop - start);
                 appendValue(device, getValueFromModel(observation, QUERY_OBS_VALUE));
               }
             });
@@ -170,5 +180,21 @@ public class Launcher {
       value = Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
     }
     return value;
+  }
+
+  private long getTimestamp(String obesrvation) {
+    Model model = ModelFactory.createDefaultModel();
+    model.read(new StringReader(obesrvation), null, RDFLanguages.strLangJSONLD);
+    String query = "SELECT ?ts WHERE { ?z a <http://purl.oclc.org/NET/ssnx/ssn#Observation>; <http://purl.oclc.org/NET/ssnx/ssn#observationResultTime> ?ts }";
+    ResultSet rs = QueryExecutionFactory.create(query, model).execSelect();
+    Long res = null;
+    while (rs.hasNext()) {
+      QuerySolution solution = rs.next();
+      res = ZonedDateTime.parse(solution.getLiteral("?ts").getString(),
+          DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC))
+          .toInstant()
+          .toEpochMilli();
+    }
+    return res;
   }
 }
