@@ -115,8 +115,8 @@ public class Launcher {
                 String startTime = DateTimeFormatter.ISO_OFFSET_DATE_TIME
                     .withZone(ZoneOffset.UTC)
                     .format(Instant.ofEpochMilli(start));
-                logger.debug("Observation sent in {}", startTime);
-                logger.debug("Observation received in {}", stopTime);
+                logger.debug("Observation sent in {} long {}", startTime, start);
+                logger.debug("Observation received in {} long {}", stopTime, stop);
                 logger.info("Observation execute time is {} ms", stop - start);
                 appendValue(device, getValueFromModel(observation, QUERY_OBS_VALUE));
               }
@@ -191,7 +191,7 @@ public class Launcher {
     while (rs.hasNext()) {
       QuerySolution solution = rs.next();
       res = ZonedDateTime.parse(solution.getLiteral("?ts").getString(),
-          DateTimeFormatter.ISO_OFFSET_DATE_TIME.withZone(ZoneOffset.UTC))
+          DateTimeFormatter.ISO_OFFSET_DATE_TIME)
           .toInstant()
           .toEpochMilli();
     }

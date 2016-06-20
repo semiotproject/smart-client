@@ -167,10 +167,8 @@ public class HTTPClient {
         logger.debug("Command to url '{}' is sent successfuly!", command_url);
         logger.info("Command is executed by {} ms", stop-st);
       } else {
-        logger.warn("Something went wrong with command to url '{}' ! Execution time is {} ms. Response code is {}, reason {}",
-            command_url, stop-st, response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
+        logger.warn("Command failed by {} ms", stop-st);
       }
-      logger.info("Command is executed by {} ms", (long) ((System.currentTimeMillis() - st)));
       response.close();
     } catch (IOException ex) {
       logger.warn("Catch exception! Message is {}", ex.getMessage(), ex);
