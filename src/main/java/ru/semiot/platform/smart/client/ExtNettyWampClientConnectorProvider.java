@@ -12,7 +12,7 @@ public class ExtNettyWampClientConnectorProvider extends ws.wamp.jawampa.transpo
   private static volatile int count = 0;
   @Override
     public ScheduledExecutorService createScheduler() {
-        NioEventLoopGroup scheduler = new NioEventLoopGroup(1000, new ThreadFactory() {
+        NioEventLoopGroup scheduler = new NioEventLoopGroup(20, new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
               synchronized((Integer)count){

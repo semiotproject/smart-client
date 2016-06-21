@@ -10,7 +10,12 @@ import java.io.StringReader;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.concurrent.Executors;
+import javafx.util.Pair;
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.security.cert.CertificateException;
@@ -40,6 +45,9 @@ import org.apache.jena.rdf.model.ModelFactory;
 import org.apache.jena.riot.RDFLanguages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import rx.Observable;
+import rx.Scheduler;
+import rx.schedulers.Schedulers;
 
 /**
  *
@@ -51,6 +59,7 @@ public class HTTPClient {
   private static final HTTPClient INSTANCE = new HTTPClient();
   private String url, username, password, cookie;
   private CloseableHttpClient httpclient;
+  private static final Scheduler SCHEDULER = Schedulers.from(Executors.newFixedThreadPool(10));
   private static final String QUERY_SYSTEMS = "SELECT ?system_id { "
       + "?z a <${HOST}/doc#${TYPE}>; "
       + "<http://purl.org/dc/terms/identifier> ?system_id "
@@ -165,9 +174,9 @@ public class HTTPClient {
       stop = System.currentTimeMillis();
       if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
         logger.debug("Command to url '{}' is sent successfuly!", command_url);
-        logger.info("Command is executed by {} ms", stop-st);
+        logger.info("Command is executed by {} ms", stop - st);
       } else {
-        logger.warn("Command failed by {} ms", stop-st);
+        logger.warn("Command failed by {} ms", stop - st);
       }
       response.close();
     } catch (IOException ex) {
@@ -185,6 +194,7 @@ public class HTTPClient {
 
   private HashMap<String, HashMap<String, String>> sendQuery(boolean isDevice) {
     HashMap<String, HashMap<String, String>> map = new HashMap<>();
+    List<Observable<Pair>> obsers = new ArrayList<>();
     HttpGet httpGet = new HttpGet(url + "/systems/");
     String type = isDevice ? "TemperatureDevice" : "Regulator";
     try {
@@ -207,8 +217,16 @@ public class HTTPClient {
           String system_id = solution.getLiteral("?system_id").getString();
           String topic = isDevice ? system_id + ".observations." + system_id + "-temperature"
               : system_id + ".commandresults.pressure";
-          logger.debug("Try to get building for system {}", system_id);
-          String building = getBuilding(system_id);
+
+          obsers.add(getBuldingAsync(system_id));
+        }
+        Iterator<Pair> iterator = Observable.merge(obsers).toBlocking().toIterable().iterator();
+        while (iterator.hasNext()) {
+          Pair<String, String> p = iterator.next();
+          String building = p.getKey();
+          String system_id = p.getValue();
+          String topic = isDevice ? system_id + ".observations." + system_id + "-temperature"
+              : system_id + ".commandresults.pressure";
           if (map.containsKey(building)) {
             map.get(building).put(system_id, topic);
           } else {
@@ -217,7 +235,6 @@ public class HTTPClient {
             map.put(building, m);
           }
         }
-
       }
 
     } catch (IOException ex) {
@@ -226,7 +243,21 @@ public class HTTPClient {
     return map;
   }
 
+  private Observable<Pair> getBuldingAsync(String system_id) {
+    return Observable.create(o -> {
+      try {
+        String building = getBuilding(system_id);
+        Pair pair = new Pair(building, system_id);
+        o.onNext(pair);
+      } catch (Exception e) {
+        o.onError(e);
+      }
+      o.onCompleted();
+    }).subscribeOn(SCHEDULER).cast(Pair.class);
+  }
+
   private String getBuilding(String system_id) {
+    logger.debug("Try to get building for system {}", system_id);
     HttpGet httpGet = new HttpGet(url + "/systems/" + system_id);
     try {
       httpGet.setHeader("Accept", "application/ld+json");
