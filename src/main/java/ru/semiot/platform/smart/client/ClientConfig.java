@@ -40,4 +40,8 @@ public interface ClientConfig extends Config {
   @DefaultValue("2")
   @Key("smart.client.temperature.step")
   double step();
+  
+  @DefaultValue("30")
+  @Key("smart.client.size.page")
+  int sizePage();
 }

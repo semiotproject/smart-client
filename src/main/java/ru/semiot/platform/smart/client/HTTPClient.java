@@ -5,26 +5,13 @@
  */
 package ru.semiot.platform.smart.client;
 
-import java.io.IOException;
-import java.io.StringReader;
-import java.security.KeyManagementException;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.concurrent.Executors;
-import javafx.util.Pair;
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLContext;
-import javax.security.cert.CertificateException;
-import javax.security.cert.X509Certificate;
+import org.aeonbits.owner.ConfigFactory;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
@@ -49,6 +36,24 @@ import rx.Observable;
 import rx.Scheduler;
 import rx.schedulers.Schedulers;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.net.URISyntaxException;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map.Entry;
+import java.util.concurrent.Executors;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLContext;
+import javax.security.cert.CertificateException;
+import javax.security.cert.X509Certificate;
+
 /**
  *
  * @author Daniil Garayzuev <garayzuev@gmail.com>
@@ -56,13 +61,20 @@ import rx.schedulers.Schedulers;
 public class HTTPClient {
 
   private static final Logger logger = LoggerFactory.getLogger(HTTPClient.class);
+  private static final ClientConfig CONFIG = ConfigFactory.create(ClientConfig.class);
   private static final HTTPClient INSTANCE = new HTTPClient();
   private String url, username, password, cookie;
   private CloseableHttpClient httpclient;
   private static final Scheduler SCHEDULER = Schedulers.from(Executors.newFixedThreadPool(10));
-  private static final String QUERY_SYSTEMS = "SELECT ?system_id { "
-      + "?z a <${HOST}/doc#${TYPE}>; "
-      + "<http://purl.org/dc/terms/identifier> ?system_id "
+  
+  private static final String QUERY_TOTAL_ITEMS = "SELECT ?count {"
+      + "?x <http://www.w3.org/ns/hydra/core#totalItems> ?count}";
+  
+  private static final String QUERY_SYSTEMS = "SELECT ?system_id ?type { "
+      + "?z a ?type; "
+      + "<http://purl.org/dc/terms/identifier> ?system_id . "
+      + "{ ?z a <${HOST}/doc#Regulator> }"
+      + "UNION { ?z a <${HOST}/doc#TemperatureDevice> }"
       + "}";
 
   private static final String QUERY_COMMAND_RESULT = "SELECT ?value { "
@@ -95,7 +107,9 @@ public class HTTPClient {
       + "    dul:hasParameterDataValue \"${VALUE}\"^^xsd:double ;\n"
       + "  ] ;\n"
       + "] .";
-
+  private static String typeTemperatureDevice = "${HOST}/doc#TemperatureDevice";
+  
+  
   public void init(String hosturl, String pass, String user) {
     this.url = hosturl;
     this.username = user;
@@ -183,21 +197,46 @@ public class HTTPClient {
       logger.warn("Catch exception! Message is {}", ex.getMessage(), ex);
     }
   }
+  
+  public void getDevicesAndRegulators(HashMap<String, HashMap<String, String>> devices,
+      HashMap<String, HashMap<String, String>> regulators) {
+    String typeTemperDevice = typeTemperatureDevice.replace("${HOST}", url);
+    
+    int count = getPage(1, typeTemperDevice, devices, regulators);
+    int countPage = (int) Math.ceil((double) count / CONFIG.sizePage());
+    logger.debug("Count page = {}", countPage);
+    for (int i = 2; i <= countPage; i++) {
+      getPage(i, typeTemperDevice, devices, regulators);
+    }
 
-  public HashMap<String, HashMap<String, String>> getRegulators() {
-    return sendQuery(false);
+    printlnMap(devices);
+    printlnMap(regulators);
   }
+  
+  boolean printlnMap(HashMap<String, HashMap<String, String>> map) {
+    int count = 0;
+    for (Entry<String, HashMap<String, String>> entry : map.entrySet()) {
+      String key = entry.getKey();
+      HashMap<String, String> value = entry.getValue();
+      for (Entry<String, String> entry1 : value.entrySet()) {
+        ++count;
+        // logger.debug("{} {}", ++count, entry1.getValue());
+      }
+    }
+    logger.debug("Added to map {}", count);
 
-  public HashMap<String, HashMap<String, String>> getDevices() {
-    return sendQuery(true);
+    return false;
   }
-
-  private HashMap<String, HashMap<String, String>> sendQuery(boolean isDevice) {
-    HashMap<String, HashMap<String, String>> map = new HashMap<>();
-    List<Observable<Pair>> obsers = new ArrayList<>();
-    HttpGet httpGet = new HttpGet(url + "/systems/");
-    String type = isDevice ? "TemperatureDevice" : "Regulator";
+  
+  private int getPage(int page, String typeTemperDevice, HashMap<String, HashMap<String, String>> devices,
+      HashMap<String, HashMap<String, String>> regulators) {
+    long startTimestamp = System.currentTimeMillis();
+    List<Observable<Device>> obsers = new ArrayList<>();
     try {
+      URIBuilder uriBuilder = new URIBuilder(url);
+      uriBuilder.setPath("/systems").setParameter("page", String.valueOf(page)).setParameter("size",
+          String.valueOf(CONFIG.sizePage()));
+      HttpGet httpGet = new HttpGet(uriBuilder.build());
       httpGet.setHeader("Accept", "application/ld+json");
       httpGet.setHeader("Cookie", cookie);
       CloseableHttpResponse response = httpclient.execute(httpGet);
@@ -208,52 +247,79 @@ public class HTTPClient {
       } else {
         Model model = ModelFactory.createDefaultModel();
         model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
-        ResultSet rs = QueryExecutionFactory.create(
-            QUERY_SYSTEMS.replace("${HOST}", url).replace("${TYPE}", type), model)
-            .execSelect();
+        ResultSet rs =
+            QueryExecutionFactory.create(QUERY_SYSTEMS.replace("${HOST}", url), model).execSelect();
         response.close();
+        
         while (rs.hasNext()) {
           QuerySolution solution = rs.next();
           String system_id = solution.getLiteral("?system_id").getString();
-          String topic = isDevice ? system_id + ".observations." + system_id + "-temperature"
-              : system_id + ".commandresults.pressure";
-
-          obsers.add(getBuldingAsync(system_id));
+          String type = solution.getResource("?type").getURI();
+          obsers.add(getBuldingAsync(system_id, type));
         }
-        Iterator<Pair> iterator = Observable.merge(obsers).toBlocking().toIterable().iterator();
+        Iterator<Device> iterator = Observable.merge(obsers).toBlocking().toIterable().iterator();
         while (iterator.hasNext()) {
-          Pair<String, String> p = iterator.next();
-          String building = p.getKey();
-          String system_id = p.getValue();
-          String topic = isDevice ? system_id + ".observations." + system_id + "-temperature"
+          Device d = iterator.next();
+          String system_id = d.getSystemId();
+          String type = d.getType();
+          String topic = type.equals(typeTemperDevice) ? system_id + ".observations." + system_id + "-temperature"
               : system_id + ".commandresults.pressure";
-          if (map.containsKey(building)) {
-            map.get(building).put(system_id, topic);
-          } else {
-            HashMap<String, String> m = new HashMap<>();
-            m.put(system_id, topic);
-            map.put(building, m);
+          addSystemToMap(type.equals(typeTemperDevice) ? devices : regulators ,d.getBuilding(), d.getSystemId(), topic);
+        }
+        if(page == 1) {
+          ResultSet rs1 = QueryExecutionFactory.create(QUERY_TOTAL_ITEMS, model).execSelect();
+          while (rs1.hasNext()) {
+            logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
+            return rs1.next().getLiteral("count").getInt();
           }
         }
       }
-
-    } catch (IOException ex) {
-      logger.warn("Can't get {}! Message is {}", type, ex.getMessage(), ex);
+    } catch (URISyntaxException | IOException e) {
+      logger.error(e.getMessage(), e);
     }
-    return map;
+    logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
+    return 0;
+  }
+    
+  private void addSystemToMap(HashMap<String, HashMap<String, String>> map, String building,
+      String system_id, String topic) {
+    if(contains(map, system_id)) {
+      logger.debug("System {} already exists", system_id);
+    } else {
+      if (map.containsKey(building)) {
+        map.get(building).put(system_id, topic);
+      } else {
+        HashMap<String, String> m = new HashMap<>();
+        m.put(system_id, topic);
+        map.put(building, m);
+      }
+    }
+  }
+  
+  boolean contains(HashMap<String, HashMap<String, String>> map, String systemId) {
+    for (Entry<String, HashMap<String, String>> entry : map.entrySet()) {
+      String key = entry.getKey();
+      HashMap<String, String> value = entry.getValue();
+      if(value.containsKey(systemId)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
-  private Observable<Pair> getBuldingAsync(String system_id) {
+  private Observable<Device> getBuldingAsync(String system_id, String topic) {
     return Observable.create(o -> {
       try {
         String building = getBuilding(system_id);
-        Pair pair = new Pair(building, system_id);
-        o.onNext(pair);
+        
+        Device device = new Device(building, system_id, topic);
+        o.onNext(device);
       } catch (Exception e) {
         o.onError(e);
       }
       o.onCompleted();
-    }).subscribeOn(SCHEDULER).cast(Pair.class);
+    }).subscribeOn(SCHEDULER).cast(Device.class);
   }
 
   private String getBuilding(String system_id) {

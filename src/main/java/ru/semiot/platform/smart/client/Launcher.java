@@ -1,14 +1,5 @@
 package ru.semiot.platform.smart.client;
 
-import java.io.IOException;
-import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-
-import java.util.HashMap;
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.jena.query.QueryExecutionFactory;
 import org.apache.jena.query.QuerySolution;
@@ -20,6 +11,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rx.Observer;
 
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.UnsupportedEncodingException;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+
 /**
  *
  * @author Daniil Garayzuev <garayzuev@gmail.com>
@@ -28,8 +28,8 @@ public class Launcher {
 
   private static final Logger logger = LoggerFactory.getLogger(Launcher.class);
   private static final ClientConfig CONFIG = ConfigFactory.create(ClientConfig.class);
-  private HashMap<String, HashMap<String, String>> devicesInBuildings;
-  private HashMap<String, HashMap<String, String>> regulatorsInBuildings;
+  private HashMap<String, HashMap<String, String>> devicesInBuildings = new HashMap<>();
+  private HashMap<String, HashMap<String, String>> regulatorsInBuildings = new HashMap<>();
   private HashMap<String, Double> regulatorsLastResults;
   //private HashMap<String, Integer> countsDevicesInBuildings;
   //private HashMap<String, Double> sumTempInBuildings;
@@ -66,8 +66,7 @@ public class Launcher {
 
   public void run() {
     logger.info("Smart-client is starting");
-    devicesInBuildings = HTTPClient.getInstance().getDevices();
-    regulatorsInBuildings = HTTPClient.getInstance().getRegulators();
+    HTTPClient.getInstance().getDevicesAndRegulators(devicesInBuildings, regulatorsInBuildings);
     logger.debug("Try to subscribe in regulators' topics");
     for (String building : regulatorsInBuildings.keySet()) {
       for (String regulator : regulatorsInBuildings.get(building).keySet()) {
@@ -201,12 +200,12 @@ public class Launcher {
     @Override
     public void onNext(java.lang.String observation) {
       long stop = System.currentTimeMillis();
-      String stopTime = (String) DateTimeFormatter.ISO_OFFSET_DATE_TIME
+      String stopTime = DateTimeFormatter.ISO_OFFSET_DATE_TIME
           .withZone(ZoneOffset.UTC)
           .format(Instant.ofEpochMilli(stop));
 
       long start = getTimestamp(observation);
-      String startTime = (String) DateTimeFormatter.ISO_OFFSET_DATE_TIME
+      String startTime = DateTimeFormatter.ISO_OFFSET_DATE_TIME
           .withZone(ZoneOffset.UTC)
           .format(Instant.ofEpochMilli(start));
       logger.debug("Observation sent in {} long {}", startTime, start);
