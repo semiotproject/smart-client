@@ -283,29 +283,14 @@ public class HTTPClient {
     
   private void addSystemToMap(HashMap<String, HashMap<String, String>> map, String building,
       String system_id, String topic) {
-    if(contains(map, system_id)) {
-      logger.debug("System {} already exists", system_id);
-    } else {
-      if (map.containsKey(building)) {
-        map.get(building).put(system_id, topic);
-      } else {
-        HashMap<String, String> m = new HashMap<>();
-        m.put(system_id, topic);
-        map.put(building, m);
-      }
-    }
-  }
-  
-  boolean contains(HashMap<String, HashMap<String, String>> map, String systemId) {
-    for (Entry<String, HashMap<String, String>> entry : map.entrySet()) {
-      String key = entry.getKey();
-      HashMap<String, String> value = entry.getValue();
-      if(value.containsKey(systemId)) {
-        return true;
-      }
-    }
 
-    return false;
+    if (map.containsKey(building)) {
+      map.get(building).put(system_id, topic);
+    } else {
+      HashMap<String, String> m = new HashMap<>();
+      m.put(system_id, topic);
+      map.put(building, m);
+    }
   }
 
   private Observable<Device> getBuldingAsync(String system_id, String topic) {
