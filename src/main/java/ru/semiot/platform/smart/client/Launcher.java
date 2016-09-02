@@ -14,6 +14,8 @@ import rx.Observer;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -59,9 +61,15 @@ public class Launcher {
     }
   }
 
-  public static void main(String[] argv) throws UnsupportedEncodingException, IOException {
-    Launcher launcher = new Launcher();
-    launcher.run();
+  public static void main(String[] arg) throws IOException {
+    if(arg.length > 1 && arg[0].equalsIgnoreCase("-parse")) {
+      Path filePath = Paths.get(arg[1]);
+      LogParser parser = new LogParser(filePath);
+      parser.run();
+    } else {
+      Launcher launcher = new Launcher();
+      launcher.run();
+    }
   }
 
   public void run() {

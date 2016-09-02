@@ -55,7 +55,6 @@ import javax.security.cert.CertificateException;
 import javax.security.cert.X509Certificate;
 
 /**
- *
  * @author Daniil Garayzuev <garayzuev@gmail.com>
  */
 public class HTTPClient {
@@ -66,10 +65,10 @@ public class HTTPClient {
   private String url, username, password, cookie;
   private CloseableHttpClient httpclient;
   private static final Scheduler SCHEDULER = Schedulers.from(Executors.newFixedThreadPool(10));
-  
+
   private static final String QUERY_TOTAL_ITEMS = "SELECT ?count {"
       + "?x <http://www.w3.org/ns/hydra/core#totalItems> ?count}";
-  
+
   private static final String QUERY_SYSTEMS = "SELECT ?system_id ?type { "
       + "?z a ?type; "
       + "<http://purl.org/dc/terms/identifier> ?system_id . "
@@ -108,8 +107,8 @@ public class HTTPClient {
       + "  ] ;\n"
       + "] .";
   private static String typeTemperatureDevice = "${HOST}/doc#TemperatureDevice";
-  
-  
+
+
   public void init(String hosturl, String pass, String user) {
     this.url = hosturl;
     this.username = user;
@@ -197,11 +196,11 @@ public class HTTPClient {
       logger.warn("Catch exception! Message is {}", ex.getMessage(), ex);
     }
   }
-  
+
   public void getDevicesAndRegulators(HashMap<String, HashMap<String, String>> devices,
       HashMap<String, HashMap<String, String>> regulators) {
     String typeTemperDevice = typeTemperatureDevice.replace("${HOST}", url);
-    
+
     int count = getPage(1, typeTemperDevice, devices, regulators);
     int countPage = (int) Math.ceil((double) count / CONFIG.sizePage());
     logger.debug("Count page = {}", countPage);
@@ -212,7 +211,7 @@ public class HTTPClient {
     printlnMap(devices);
     printlnMap(regulators);
   }
-  
+
   boolean printlnMap(HashMap<String, HashMap<String, String>> map) {
     int count = 0;
     for (Entry<String, HashMap<String, String>> entry : map.entrySet()) {
@@ -227,7 +226,7 @@ public class HTTPClient {
 
     return false;
   }
-  
+
   private int getPage(int page, String typeTemperDevice, HashMap<String, HashMap<String, String>> devices,
       HashMap<String, HashMap<String, String>> regulators) {
     long startTimestamp = System.currentTimeMillis();
@@ -250,7 +249,7 @@ public class HTTPClient {
         ResultSet rs =
             QueryExecutionFactory.create(QUERY_SYSTEMS.replace("${HOST}", url), model).execSelect();
         response.close();
-        
+
         while (rs.hasNext()) {
           QuerySolution solution = rs.next();
           String system_id = solution.getLiteral("?system_id").getString();
@@ -264,9 +263,9 @@ public class HTTPClient {
           String type = d.getType();
           String topic = type.equals(typeTemperDevice) ? system_id + ".observations." + system_id + "-temperature"
               : system_id + ".commandresults.pressure";
-          addSystemToMap(type.equals(typeTemperDevice) ? devices : regulators ,d.getBuilding(), d.getSystemId(), topic);
+          addSystemToMap(type.equals(typeTemperDevice) ? devices : regulators, d.getBuilding(), d.getSystemId(), topic);
         }
-        if(page == 1) {
+        if (page == 1) {
           ResultSet rs1 = QueryExecutionFactory.create(QUERY_TOTAL_ITEMS, model).execSelect();
           while (rs1.hasNext()) {
             logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
@@ -280,7 +279,7 @@ public class HTTPClient {
     logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
     return 0;
   }
-    
+
   private void addSystemToMap(HashMap<String, HashMap<String, String>> map, String building,
       String system_id, String topic) {
 
@@ -297,7 +296,7 @@ public class HTTPClient {
     return Observable.create(o -> {
       try {
         String building = getBuilding(system_id);
-        
+
         Device device = new Device(building, system_id, topic);
         o.onNext(device);
       } catch (Exception e) {
@@ -339,32 +338,41 @@ public class HTTPClient {
   public double getLastCommandResult(String regulator_id) {
     String uri = url + "/systems/" + regulator_id + "/processes/pressure/commandResults";
     HttpGet httpGet = new HttpGet(uri);
-    Double d = null;
     try {
       httpGet.setHeader("Accept", "application/ld+json");
       httpGet.setHeader("Cookie", cookie);
       CloseableHttpResponse response = httpclient.execute(httpGet);
-      if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
-        logger.warn("Something went wrong! Response code is {}, reason {}",
-            response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-        response.close();
-      } else {
-        Model model = ModelFactory.createDefaultModel();
-        String desc = EntityUtils.toString(response.getEntity());
-        model.read(new StringReader(desc), null, RDFLanguages.strLangJSONLD);
-        //model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
-        response.close();
-        ResultSet rs = QueryExecutionFactory.create(QUERY_COMMAND_RESULT.replace("${URI}", uri), model).execSelect();
-        while (rs.hasNext()) {
-          QuerySolution solution = rs.next();
-          return Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
+
+      if (response != null) {
+        if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
+          logger.warn("Something went wrong! Response code is {}, reason {}",
+              response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
+          response.close();
+        } else {
+          Model model = ModelFactory.createDefaultModel();
+          String desc = EntityUtils.toString(response.getEntity());
+          model.read(new StringReader(desc), null, RDFLanguages.strLangJSONLD);
+          //model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
+          response.close();
+          ResultSet rs = QueryExecutionFactory
+              .create(QUERY_COMMAND_RESULT.replace("${URI}", uri), model)
+              .execSelect();
+          if (rs.hasNext()) {
+            QuerySolution solution = rs.next();
+            return Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
+          } else {
+            logger.error("Can't find the last command result! URL: {} Response: {}",
+                httpGet.getURI().toASCIIString(), desc);
+            throw new IllegalStateException();
+          }
         }
-
+      } else {
+        logger.error("Response for the last command result is null! URL: {}",
+            httpGet.getURI().toASCIIString());
       }
-
     } catch (IOException ex) {
       logger.warn("Can't get commandResult for id {}! Message is {}", regulator_id, ex.getMessage(), ex);
     }
-    return d;
+    throw new IllegalStateException();
   }
 }
