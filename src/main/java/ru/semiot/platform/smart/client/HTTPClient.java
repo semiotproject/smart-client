@@ -361,8 +361,8 @@ public class HTTPClient {
             QuerySolution solution = rs.next();
             return Double.parseDouble(solution.getLiteral("?value").getString().replace(',', '.'));
           } else {
-            logger.error("Can't find the last command result! URL: {} Response: {}",
-                httpGet.getURI().toASCIIString(), desc);
+            logger.warn("Can't find last command result at {}",
+                httpGet.getURI().toASCIIString());
             throw new IllegalStateException();
           }
         }
@@ -371,7 +371,7 @@ public class HTTPClient {
             httpGet.getURI().toASCIIString());
       }
     } catch (IOException ex) {
-      logger.warn("Can't get commandResult for id {}! Message is {}", regulator_id, ex.getMessage(), ex);
+      logger.warn("Can't get commandResult for [{}]! Message: {}", regulator_id, ex.getMessage(), ex);
     }
     throw new IllegalStateException();
   }

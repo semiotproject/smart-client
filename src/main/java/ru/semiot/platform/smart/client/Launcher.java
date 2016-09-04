@@ -13,7 +13,6 @@ import rx.Observer;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -23,7 +22,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 
 /**
- *
  * @author Daniil Garayzuev <garayzuev@gmail.com>
  */
 public class Launcher {
@@ -62,7 +60,7 @@ public class Launcher {
   }
 
   public static void main(String[] arg) throws IOException {
-    if(arg.length > 1 && arg[0].equalsIgnoreCase("-parse")) {
+    if (arg.length > 1 && arg[0].equalsIgnoreCase("-parse")) {
       Path filePath = Paths.get(arg[1]);
       LogParser parser = new LogParser(filePath);
       parser.run();
@@ -95,10 +93,15 @@ public class Launcher {
                 regulatorsLastResults.put(regulator, getValueFromModel(commandResult, QUERY_VALUE));
               }
             });
-        regulatorsLastResults.put(regulator, HTTPClient.getInstance().getLastCommandResult(regulator));
+        try {
+          regulatorsLastResults.put(regulator,
+              HTTPClient.getInstance().getLastCommandResult(regulator));
+        } catch (IllegalStateException ex) {
+          regulatorsLastResults.put(regulator, 1.0);
+        }
       }
     }
-    logger.debug("Try to subscribe in devices' topics");
+    logger.info("Try to subscribe in devices' topics");
     for (String building : devicesInBuildings.keySet()) {
       DeviceObserver o = new DeviceObserver(devicesInBuildings.get(building).size(), building);
       buildingsObservers.put(building, o);
@@ -108,7 +111,7 @@ public class Launcher {
       }
     }
     logger.info("Smart-client is started");
-    while (true);
+    while (true) ;
 
   }
 
@@ -168,7 +171,9 @@ public class Launcher {
   private long getTimestamp(String obesrvation) {
     Model model = ModelFactory.createDefaultModel();
     model.read(new StringReader(obesrvation), null, RDFLanguages.strLangJSONLD);
-    String query = "SELECT ?ts WHERE { ?z a <http://purl.oclc.org/NET/ssnx/ssn#Observation>; <http://purl.oclc.org/NET/ssnx/ssn#observationResultTime> ?ts }";
+    String query = "SELECT ?ts WHERE { " +
+        "?z a <http://purl.oclc.org/NET/ssnx/ssn#Observation>; " +
+        "<http://purl.oclc.org/NET/ssnx/ssn#observationResultTime> ?ts }";
     ResultSet rs = QueryExecutionFactory.create(query, model).execSelect();
     Long res = null;
     while (rs.hasNext()) {
@@ -239,15 +244,15 @@ public class Launcher {
 
     private void checkTemperature() {
       double avg = sum / count;
-      logger.debug("Check temperature in building {}. Average temperature is {}", BUILDING, avg);
+      logger.info("Check temperature in building {}. Average temperature is {}", BUILDING, avg);
       if (avg > CONFIG.maxTemperature()) {
-        logger.debug("Temperature is big!");
+        logger.info("Temperature is big!");
         for (java.lang.String regulator : regulatorsInBuildings.get(BUILDING).keySet()) {
           HTTPClient.getInstance().sendCommand(regulator, regulatorsLastResults.get(regulator) - CONFIG.step());
         }
       }
       if (avg < CONFIG.minTemperature()) {
-        logger.debug("Temperature is small!");
+        logger.info("Temperature is small!");
         for (java.lang.String regulator : regulatorsInBuildings.get(BUILDING).keySet()) {
           HTTPClient.getInstance().sendCommand(regulator, regulatorsLastResults.get(regulator) + CONFIG.step());
         }
