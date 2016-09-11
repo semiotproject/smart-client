@@ -1,4 +1,4 @@
-package ru.semiot.platform.smart.client;
+package ru.semiot.platform.smartclient;
 
 public class Device {
 

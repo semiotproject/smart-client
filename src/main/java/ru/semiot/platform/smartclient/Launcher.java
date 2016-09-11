@@ -1,4 +1,4 @@
-package ru.semiot.platform.smart.client;
+package ru.semiot.platform.smartclient;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.jena.query.QueryExecutionFactory;
@@ -62,7 +62,12 @@ public class Launcher {
   public static void main(String[] arg) throws IOException {
     if (arg.length > 1 && arg[0].equalsIgnoreCase("-parse")) {
       Path filePath = Paths.get(arg[1]);
-      LogParser parser = new LogParser(filePath);
+      LogParser parser;
+      if (arg.length > 2) {
+        parser = new LogParser(filePath, arg[2]);
+      } else {
+        parser = new LogParser(filePath);
+      }
       parser.run();
     } else {
       Launcher launcher = new Launcher();

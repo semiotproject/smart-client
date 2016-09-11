@@ -3,7 +3,7 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package ru.semiot.platform.smart.client;
+package ru.semiot.platform.smartclient;
 
 import org.aeonbits.owner.ConfigFactory;
 import org.apache.http.HttpStatus;

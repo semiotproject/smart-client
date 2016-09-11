@@ -1,4 +1,4 @@
-package ru.semiot.platform.smart.client;
+package ru.semiot.platform.smartclient;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

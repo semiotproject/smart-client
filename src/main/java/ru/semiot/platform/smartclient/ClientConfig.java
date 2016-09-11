@@ -1,4 +1,4 @@
-package ru.semiot.platform.smart.client;
+package ru.semiot.platform.smartclient;
 
 import org.aeonbits.owner.Config;
 import org.aeonbits.owner.Config.LoadPolicy;
