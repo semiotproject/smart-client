@@ -118,7 +118,7 @@ public class Launcher {
     logger.info("Smart-client is started");
     try {
       while (true) {
-        wait();
+        Thread.sleep(120000);
       }
     } catch (InterruptedException ex) {}
   }
