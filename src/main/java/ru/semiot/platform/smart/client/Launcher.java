@@ -111,8 +111,11 @@ public class Launcher {
       }
     }
     logger.info("Smart-client is started");
-    while (true) ;
-
+    try {
+      while (true) {
+        wait();
+      }
+    } catch (InterruptedException ex) {}
   }
 
   /*private synchronized void appendValue(String device, double value) {
