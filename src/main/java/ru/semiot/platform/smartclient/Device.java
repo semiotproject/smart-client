@@ -2,13 +2,13 @@ package ru.semiot.platform.smartclient;
 
 public class Device {
 
-  String building;
-  String system_id;
-  String type;
+  private final String building;
+  private final String systemId;
+  private final String type;
   
-  public Device(String building, String system_id, String type) {
+  public Device(String building, String systemId, String type) {
     this.building = building;
-    this.system_id = system_id;
+    this.systemId = systemId;
     this.type = type;
   }
   
@@ -17,7 +17,7 @@ public class Device {
   }
   
   public String getSystemId() {
-    return system_id;
+    return systemId;
   }
   
   public String getType() {

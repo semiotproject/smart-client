@@ -6,6 +6,7 @@
 package ru.semiot.platform.smartclient;
 
 import org.aeonbits.owner.ConfigFactory;
+import org.apache.http.HttpEntity;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -38,7 +39,7 @@ import rx.schedulers.Schedulers;
 
 import java.io.IOException;
 import java.io.StringReader;
-import java.net.URISyntaxException;
+import java.io.UnsupportedEncodingException;
 import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -46,6 +47,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Executors;
 
@@ -168,55 +170,64 @@ public class HTTPClient {
       //logger.debug("Cookie are got!");
       response.close();
     } catch (IOException ex) {
-
+      logger.warn(ex.getMessage(), ex);
     }
   }
 
-  public void sendCommand(String system_id, double value) {
-    String command_url = url + "/systems/" + system_id + "/processes/pressure";
+  public void sendCommand(String systemId, double value) {
+    String command_url = url + "/systems/" + systemId + "/processes/pressure";
     logger.debug("Try to send command to url '{}' with value {}", command_url, value);
-    HttpPost httpPost = new HttpPost(command_url);
-    String entity = COMMAND.replace("${HOST}", this.url).replace("${SYSTEM_ID}", system_id).replace("${VALUE}", Double.toString(value));
-    long stop;
+
+    String entity = COMMAND.replace("${HOST}", this.url)
+        .replace("${SYSTEM_ID}", systemId)
+        .replace("${VALUE}", Double.toString(value));
+
+    HttpPost httpPost;
     try {
-      httpPost.setEntity(new StringEntity(entity));
-      httpPost.setHeader("Content-Type", "text/turtle");
-      httpPost.setHeader("Cookie", cookie);
-      long st = System.currentTimeMillis();
-      CloseableHttpResponse response = httpclient.execute(httpPost);
-      stop = System.currentTimeMillis();
+      httpPost = newHttpPost(command_url, new StringEntity(entity));
+    } catch (UnsupportedEncodingException ex) {
+      logger.error(ex.getMessage(), ex);
+
+      throw new IllegalStateException();
+    }
+
+    long start = System.currentTimeMillis();
+
+    try (CloseableHttpResponse response = httpclient.execute(httpPost)) {
+      long stop = System.currentTimeMillis();
       if (response.getStatusLine().getStatusCode() == HttpStatus.SC_OK) {
         logger.debug("Command to url '{}' is sent successfuly!", command_url);
-        logger.info("Command is executed by {} ms", stop - st);
+        logger.info("Command executed for {} ms", stop - start);
       } else {
-        logger.warn("Command failed by {} ms", stop - st);
+        logger.warn("Command failed for {} ms", stop - start);
       }
-      response.close();
-    } catch (IOException ex) {
+    } catch (Throwable ex) {
       logger.warn("Catch exception! Message is {}", ex.getMessage(), ex);
     }
   }
 
-  public void getDevicesAndRegulators(HashMap<String, HashMap<String, String>> devices,
-      HashMap<String, HashMap<String, String>> regulators) {
+  public void getSensorsAndRegulators(Map<String, Map<String, String>> sensors,
+      Map<String, Map<String, String>> regulators) {
     String typeTemperDevice = typeTemperatureDevice.replace("${HOST}", url);
 
-    int count = getPage(1, typeTemperDevice, devices, regulators);
+    int count = getPage(1, typeTemperDevice, sensors, regulators);
     int countPage = (int) Math.ceil((double) count / CONFIG.sizePage());
+
     logger.debug("Count page = {}", countPage);
+
     for (int i = 2; i <= countPage; i++) {
-      getPage(i, typeTemperDevice, devices, regulators);
+      getPage(i, typeTemperDevice, sensors, regulators);
     }
 
-    printlnMap(devices);
+    printlnMap(sensors);
     printlnMap(regulators);
   }
 
-  boolean printlnMap(HashMap<String, HashMap<String, String>> map) {
+  private boolean printlnMap(Map<String, Map<String, String>> map) {
     int count = 0;
-    for (Entry<String, HashMap<String, String>> entry : map.entrySet()) {
+    for (Entry<String, Map<String, String>> entry : map.entrySet()) {
       String key = entry.getKey();
-      HashMap<String, String> value = entry.getValue();
+      Map<String, String> value = entry.getValue();
       for (Entry<String, String> entry1 : value.entrySet()) {
         ++count;
         // logger.debug("{} {}", ++count, entry1.getValue());
@@ -227,28 +238,30 @@ public class HTTPClient {
     return false;
   }
 
-  private int getPage(int page, String typeTemperDevice, HashMap<String, HashMap<String, String>> devices,
-      HashMap<String, HashMap<String, String>> regulators) {
+  private int getPage(int page, String typeTemperDevice, Map<String, Map<String, String>> devices,
+      Map<String, Map<String, String>> regulators) {
     long startTimestamp = System.currentTimeMillis();
     List<Observable<Device>> obsers = new ArrayList<>();
+
+    HttpGet httpGet;
     try {
       URIBuilder uriBuilder = new URIBuilder(url);
       uriBuilder.setPath("/systems").setParameter("page", String.valueOf(page)).setParameter("size",
           String.valueOf(CONFIG.sizePage()));
-      HttpGet httpGet = new HttpGet(uriBuilder.build());
-      httpGet.setHeader("Accept", "application/ld+json");
-      httpGet.setHeader("Cookie", cookie);
-      CloseableHttpResponse response = httpclient.execute(httpGet);
+      httpGet = newHttpGet(uriBuilder.build().toASCIIString());
+    } catch (Throwable ex) {
+      throw new IllegalStateException();
+    }
+
+    try (CloseableHttpResponse response = httpclient.execute(httpGet)) {
       if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
         logger.warn("Something went wrong! Response code is {}, reason {}",
             response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-        response.close();
       } else {
         Model model = ModelFactory.createDefaultModel();
         model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
         ResultSet rs =
             QueryExecutionFactory.create(QUERY_SYSTEMS.replace("${HOST}", url), model).execSelect();
-        response.close();
 
         while (rs.hasNext()) {
           QuerySolution solution = rs.next();
@@ -273,14 +286,14 @@ public class HTTPClient {
           }
         }
       }
-    } catch (URISyntaxException | IOException e) {
+    } catch (Throwable e) {
       logger.error(e.getMessage(), e);
     }
     logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
     return 0;
   }
 
-  private void addSystemToMap(HashMap<String, HashMap<String, String>> map, String building,
+  private void addSystemToMap(Map<String, Map<String, String>> map, String building,
       String system_id, String topic) {
 
     if (map.containsKey(building)) {
@@ -308,52 +321,42 @@ public class HTTPClient {
 
   private String getBuilding(String system_id) {
     logger.debug("Try to get building for system {}", system_id);
-    HttpGet httpGet = new HttpGet(url + "/systems/" + system_id);
-    try {
-      httpGet.setHeader("Accept", "application/ld+json");
-      httpGet.setHeader("Cookie", cookie);
-      CloseableHttpResponse response = httpclient.execute(httpGet);
+
+    HttpGet httpGet = newHttpGet(url + "/systems/" + system_id);
+
+    try (CloseableHttpResponse response = httpclient.execute(httpGet)) {
       if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
         logger.warn("Something went wrong! Response code is {}, reason {}",
             response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-        response.close();
       } else {
         Model model = ModelFactory.createDefaultModel();
         model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
-        response.close();
         ResultSet rs = QueryExecutionFactory.create(QUERY_PLACE, model).execSelect();
         while (rs.hasNext()) {
           QuerySolution solution = rs.next();
           return solution.getLiteral("?building").getString();
         }
-
       }
-
-    } catch (IOException ex) {
+    } catch (Throwable ex) {
       logger.warn("Can't get building for id {}! Message is {}", system_id, ex.getMessage(), ex);
     }
     return null;
   }
 
-  public double getLastCommandResult(String regulator_id) {
-    String uri = url + "/systems/" + regulator_id + "/processes/pressure/commandResults";
-    HttpGet httpGet = new HttpGet(uri);
-    try {
-      httpGet.setHeader("Accept", "application/ld+json");
-      httpGet.setHeader("Cookie", cookie);
-      CloseableHttpResponse response = httpclient.execute(httpGet);
+  public double getLastCommandResult(String regulatorId) {
+    String uri = url + "/systems/" + regulatorId + "/processes/pressure/commandResults";
+    HttpGet httpGet = newHttpGet(uri);
 
+    try (CloseableHttpResponse response = httpclient.execute(httpGet)) {
       if (response != null) {
         if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
           logger.warn("Something went wrong! Response code is {}, reason {}",
               response.getStatusLine().getStatusCode(), response.getStatusLine().getReasonPhrase());
-          response.close();
         } else {
           Model model = ModelFactory.createDefaultModel();
           String desc = EntityUtils.toString(response.getEntity());
           model.read(new StringReader(desc), null, RDFLanguages.strLangJSONLD);
-          //model.read(response.getEntity().getContent(), null, RDFLanguages.strLangJSONLD);
-          response.close();
+
           ResultSet rs = QueryExecutionFactory
               .create(QUERY_COMMAND_RESULT.replace("${URI}", uri), model)
               .execSelect();
@@ -371,8 +374,24 @@ public class HTTPClient {
             httpGet.getURI().toASCIIString());
       }
     } catch (IOException ex) {
-      logger.warn("Can't get commandResult for [{}]! Message: {}", regulator_id, ex.getMessage(), ex);
+      logger.warn("Can't get commandResult for [{}]! Message: {}", regulatorId, ex.getMessage(), ex);
     }
     throw new IllegalStateException();
+  }
+
+  private HttpGet newHttpGet(String url) {
+    HttpGet request = new HttpGet(url);
+    request.setHeader("Accept", "application/ld+json");
+    request.setHeader("Cookie", cookie);
+
+    return request;
+  }
+
+  private HttpPost newHttpPost(String url, HttpEntity entity) {
+    HttpPost request = new HttpPost(url);
+    request.setEntity(entity);
+    request.setHeader("Content-Type", "text/turtle");
+    request.setHeader("Cookie", cookie);
+    return request;
   }
 }
