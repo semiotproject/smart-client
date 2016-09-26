@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 import rx.Observable;
 import ws.wamp.jawampa.WampClient;
 import ws.wamp.jawampa.WampClientBuilder;
+import ws.wamp.jawampa.WampRoles;
 import ws.wamp.jawampa.auth.client.Ticket;
-import ws.wamp.jawampa.transport.netty.NettyWampClientConnectorProvider;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -30,21 +30,17 @@ public class WAMPClient implements Closeable, AutoCloseable {
       String authId, String ticket)
       throws Exception {
     WampClientBuilder builder = new WampClientBuilder();
-    builder.withConnectorProvider(new NettyWampClientConnectorProvider())
+    builder.withConnectorProvider(new ExtNettyWampClientConnectorProvider())
         .withUri(wampUri)
         .withRealm(wampRealm)
         .withInfiniteReconnects()
-        .withReconnectInterval(wampReconnectInterval,
-            TimeUnit.SECONDS)
+        .withReconnectInterval(wampReconnectInterval, TimeUnit.SECONDS)
         .withAuthId(authId)
-        .withAuthMethod(new Ticket(ticket));
+        .withAuthMethod(new Ticket(ticket))
+        .withRoles(new WampRoles[]{WampRoles.Subscriber});
     client = builder.build();
     client.open();
     return client.statusChanged();
-  }
-
-  public Observable<Long> publish(String topic, String message) {
-    return client.publish(topic, message);
   }
 
   public Observable<String> subscribe(String topic) {
