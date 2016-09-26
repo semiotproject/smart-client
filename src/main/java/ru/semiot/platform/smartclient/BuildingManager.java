@@ -147,6 +147,11 @@ public class BuildingManager {
     }
 
     @Override
+    public void onCompleted() {
+      logger.error("Building[{}] Subscription cancelled!");
+    }
+
+    @Override
     public void onError(Throwable e) {
       logger.error("Building[{}] {}", building, e);
     }
@@ -157,6 +162,11 @@ public class BuildingManager {
     @Override
     public void onNext(Model message, long __) {
       regulatorLastResult.set(getValueFromModel(message, QUERY_VALUE));
+    }
+
+    @Override
+    public void onCompleted() {
+      logger.error("Building[{}] Subscription cancelled!");
     }
 
     @Override
