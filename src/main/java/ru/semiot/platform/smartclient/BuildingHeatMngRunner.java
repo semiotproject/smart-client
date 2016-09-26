@@ -62,6 +62,12 @@ public class BuildingHeatMngRunner implements Runnable {
             .subscribe(sensorsInBuildings.get(building).get(sensor))
             .subscribe(buildingManager.getTemperatureObserver());
       }
+
+      try {
+        Thread.sleep(250);
+      } catch (InterruptedException e) {
+        logger.warn(e.getMessage(), e);
+      }
     }
 
     logger.info("Smart-client is started");

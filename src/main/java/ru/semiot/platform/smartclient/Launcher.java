@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 import ru.semiot.platform.smartclient.parsers.AverageValueParser;
 import ru.semiot.platform.smartclient.parsers.ClientResultParser;
 import ru.semiot.platform.smartclient.wamp.WAMPClient;
-import ws.wamp.jawampa.WampClient;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -33,16 +32,10 @@ public class Launcher {
     try {
       WAMPClient.getInstance()
           .init(CONFIG.wampUrl(), "realm1", 15, CONFIG.hostUsername(), CONFIG.hostPassword())
-          .subscribe((WampClient.State state) -> {
-                if (state instanceof WampClient.ConnectedState) {
-                  logger.info("[WAMP] Connected to {}", CONFIG.wampUrl());
-                } else if (state instanceof WampClient.ConnectingState) {
-                  logger.info("[WAMP] Connecting to {}", CONFIG.wampUrl());
-                } else {
-                  logger.error("[WAMP] State: {}", state);
-                }
-              }, e -> logger.error(e.getMessage(), e),
-              () -> logger.warn("[WAMP] onComplete"));
+          .subscribe(
+              state -> logger.info("[WAMP][{}] State: {}", CONFIG.wampUrl(), state),
+              e -> logger.error(e.getMessage(), e),
+              () -> logger.warn("[WAMP][{}] onComplete", CONFIG.wampUrl()));
     } catch (Exception ex) {
       logger.error(ex.getMessage(), ex);
     }
