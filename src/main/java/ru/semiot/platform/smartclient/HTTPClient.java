@@ -136,7 +136,8 @@ public class HTTPClient {
       }
 
       @Override
-      public boolean isTrusted(java.security.cert.X509Certificate[] arg0, String arg1) throws java.security.cert.CertificateException {
+      public boolean isTrusted(java.security.cert.X509Certificate[] arg0, String arg1)
+          throws java.security.cert.CertificateException {
         return true;
       }
     }).build();
@@ -150,6 +151,7 @@ public class HTTPClient {
         .build();
 
     PoolingHttpClientConnectionManager connMgr = new PoolingHttpClientConnectionManager(socketFactoryRegistry);
+    connMgr.setDefaultMaxPerRoute(5);
     b.setConnectionManager(connMgr);
 
     HttpClient client = b.build();
@@ -281,7 +283,7 @@ public class HTTPClient {
         if (page == 1) {
           ResultSet rs1 = QueryExecutionFactory.create(QUERY_TOTAL_ITEMS, model).execSelect();
           while (rs1.hasNext()) {
-            logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
+            logger.info("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
             return rs1.next().getLiteral("count").getInt();
           }
         }
@@ -289,7 +291,7 @@ public class HTTPClient {
     } catch (Throwable e) {
       logger.error(e.getMessage(), e);
     }
-    logger.debug("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
+    logger.info("Page {} processed for {} ms", page, System.currentTimeMillis() - startTimestamp);
     return 0;
   }
 

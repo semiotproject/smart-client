@@ -6,8 +6,8 @@
         </encoder>
     </appender>
     
-    <logger name="ru.semiot" level="DEBUG" additivity="true"/>
-    <logger name="io.netty" level="DEBUG" additivity="false"/>
+    <logger name="ru.semiot" level="INFO" additivity="true"/>
+    <logger name="io.netty" level="INFO" additivity="false"/>
     <logger name="ws.wamp.jawampa" level="INFO" additivity="false"/>
     <logger name="org.apache.http" level="INFO" additivity="false"/>
     <logger name="org.apache.jena" level="INFO" additivity="false"/>
