@@ -148,7 +148,7 @@ public class BuildingManager {
 
     @Override
     public void onCompleted() {
-      logger.error("Building[{}] Subscription cancelled!");
+      logger.error("Building[{}] Subscription cancelled!", building);
     }
 
     @Override
@@ -166,7 +166,7 @@ public class BuildingManager {
 
     @Override
     public void onCompleted() {
-      logger.error("Building[{}] Subscription cancelled!");
+      logger.error("Building[{}] Subscription cancelled!", building);
     }
 
     @Override

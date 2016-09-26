@@ -151,7 +151,7 @@ public class HTTPClient {
         .build();
 
     PoolingHttpClientConnectionManager connMgr = new PoolingHttpClientConnectionManager(socketFactoryRegistry);
-    connMgr.setDefaultMaxPerRoute(5);
+    connMgr.setDefaultMaxPerRoute(10);
     b.setConnectionManager(connMgr);
 
     HttpClient client = b.build();

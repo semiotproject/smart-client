@@ -36,7 +36,7 @@ public class BuildingHeatMngRunner implements Runnable {
 
     HTTPClient.getInstance().getSensorsAndRegulators(sensorsInBuildings, regulatorsInBuildings);
 
-    logger.debug("Subscribing to regulators' command results");
+    logger.info("Subscribing to regulators' command results");
 
     for (String building : regulatorsInBuildings.keySet()) {
       for (String regulatorId : regulatorsInBuildings.get(building).keySet()) {
