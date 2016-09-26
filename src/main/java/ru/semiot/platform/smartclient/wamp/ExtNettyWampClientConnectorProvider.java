@@ -1,4 +1,4 @@
-package ru.semiot.platform.smartclient;
+package ru.semiot.platform.smartclient.wamp;
 
 import io.netty.channel.nio.NioEventLoopGroup;
 import java.util.concurrent.ScheduledExecutorService;

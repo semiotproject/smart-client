@@ -1,4 +1,4 @@
-package ru.semiot.platform.smartclient;
+package ru.semiot.platform.smartclient.wamp;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
